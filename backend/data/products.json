@@ -1,0 +1,90 @@
+[
+  {
+    "id": 1,
+    "name": "Classic Band Ring",
+    "category": "Ring",
+    "price": 2500,
+    "description": "Timeless sterling silver band ring.",
+    "image_url": "",
+    "stock": 100,
+    "is_active": 1,
+    "created_at": "2026-05-31T13:16:30.249Z"
+  },
+  {
+    "id": 2,
+    "name": "Box Chain Necklace 18\"",
+    "category": "Necklace",
+    "price": 3800,
+    "description": "Elegant box chain in .925 sterling silver.",
+    "image_url": "",
+    "stock": 100,
+    "is_active": 1,
+    "created_at": "2026-05-31T13:16:30.250Z"
+  },
+  {
+    "id": 3,
+    "name": "Medium Hoop Earrings",
+    "category": "Earrings",
+    "price": 2200,
+    "description": "Classic medium hoops in polished silver.",
+    "image_url": "",
+    "stock": 100,
+    "is_active": 1,
+    "created_at": "2026-05-31T13:16:30.250Z"
+  },
+  {
+    "id": 4,
+    "name": "Open Cuff Bracelet",
+    "category": "Bracelet",
+    "price": 3200,
+    "description": "Adjustable open cuff in pure .925 silver.",
+    "image_url": "",
+    "stock": 100,
+    "is_active": 1,
+    "created_at": "2026-05-31T13:16:30.250Z"
+  },
+  {
+    "id": 5,
+    "name": "Crescent Moon Pendant",
+    "category": "Necklace",
+    "price": 4500,
+    "description": "Delicate crescent moon pendant with 20\" chain.",
+    "image_url": "",
+    "stock": 100,
+    "is_active": 1,
+    "created_at": "2026-05-31T13:16:30.250Z"
+  },
+  {
+    "id": 6,
+    "name": "Stacking Rings Set×3",
+    "category": "Ring",
+    "price": 5500,
+    "description": "Set of 3 minimalist stacking rings.",
+    "image_url": "",
+    "stock": 100,
+    "is_active": 1,
+    "created_at": "2026-05-31T13:16:30.250Z"
+  },
+  {
+    "id": 7,
+    "name": "Leaf Drop Earrings",
+    "category": "Earrings",
+    "price": 2800,
+    "description": "Nature-inspired leaf drop earrings.",
+    "image_url": "",
+    "stock": 100,
+    "is_active": 1,
+    "created_at": "2026-05-31T13:16:30.250Z"
+  },
+  {
+    "id": 8,
+    "name": "Twisted Bangle",
+    "category": "Bracelet",
+    "price": 2900,
+    "description": "Twisted rope design bangle in .925 silver.",
+    "image_url": "",
+    "stock": 100,
+    "is_active": 1,
+    "created_at": "2026-05-31T13:16:30.250Z"
+  }
+]
