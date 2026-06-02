@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const API = "http://localhost:5000";
+const API = "https://elix-production.up.railway.app";
 
 const C = {
   bg:'#070707', surface:'#0d0d0d', card:'#111111',
