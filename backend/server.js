@@ -43,7 +43,7 @@ if (readDB('products').length === 0) {
 }
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: '*' }));
+app.use(cors({ origin: ['https://elix-kappa.vercel.app', 'http://localhost:5173'] }));
 
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
