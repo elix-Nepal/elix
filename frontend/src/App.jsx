@@ -374,6 +374,11 @@ function CustomPage() {
           <Field label="Email" value={form.email} onChange={v=>upd('email',v)} placeholder="your@email.com" type="email"/>
           <Field label="Budget Range (NPR)" value={form.budget} onChange={v=>upd('budget',v)} placeholder="e.g. 5,000 – 10,000"/>
           <Field label="Describe Your Design" value={form.description} onChange={v=>upd('description',v)} placeholder="Style, finish, size, engraving, references..." required as="textarea" rows={5}/>
+            <div style={{padding:'0.85rem 1rem',background:C.surface,border:`1px solid ${C.border}`,marginBottom:'1rem'}}>
+  <p style={{fontSize:'0.7rem',color:C.muted,lineHeight:1.8,fontFamily:F.B}}>
+    <span style={{color:C.gold}}>Privacy Notice —</span> The information you provide in this form is used exclusively to respond to your custom order request and provide you with a quote. Your details are kept private and never shared with third parties. By submitting this form you consent to Elix contacting you regarding your request.
+  </p>
+</div>
           <Btn fill full onClick={submit} disabled={loading}>{loading?'Submitting...':'Submit Request'}</Btn>
           <p style={{fontSize:'0.62rem',color:C.muted,marginTop:'0.85rem',textAlign:'center',fontFamily:F.B}}>We'll respond within 24–48 hours</p>
         </>:<div style={{textAlign:'center',padding:'2rem 0'}}>
@@ -452,6 +457,11 @@ function CartPage({cart,updateQty,remove,setPage}) {
           <Field label="Delivery Address" value={customer.address} onChange={v=>upd('address',v)} placeholder="Street, Ward No., Tole..." required/>
           <Field label="City / District" value={customer.city} onChange={v=>upd('city',v)} placeholder="e.g. Bhaktapur, Kathmandu" required/>
           <Field label="Notes (optional)" value={customer.notes} onChange={v=>upd('notes',v)} placeholder="Any special delivery instructions..." as="textarea" rows={3}/>
+            <div style={{padding:'0.85rem 1rem',background:C.surface,border:`1px solid ${C.border}`,marginBottom:'1rem'}}>
+  <p style={{fontSize:'0.7rem',color:C.muted,lineHeight:1.8,fontFamily:F.B}}>
+    <span style={{color:C.gold}}>Privacy Notice —</span> Elix collects your name, phone number, email, and delivery address solely to process and deliver your order. Your information is never sold or shared with third parties. By placing an order you agree to our use of your data for order fulfillment and delivery purposes only. For questions contact us on our socials.
+  </p>
+</div>
         </>}
       </div>
       <div style={{background:C.card,border:`1px solid ${C.border}`,padding:'1.5rem',position:'sticky',top:70}}>
