@@ -4,7 +4,6 @@ const multer = require('multer');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
-const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
