@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,7 +43,22 @@ if (readDB('products').length === 0) {
 }
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: '*' }));
+app.use(cors({ origin: ['https://elix-kappa.vercel.app', 'http://localhost:5173'] }));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests, please try again later.' }
+});
+
+const adminLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: 'Too many requests.' }
+});
+
+app.use('/api/', limiter);
+app.use('/api/admin/', adminLimiter);
 app.use(express.json());
 
 if (!fs.existsSync('./uploads')) fs.mkdirSync('./uploads');
