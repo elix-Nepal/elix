@@ -43,13 +43,7 @@ if (readDB('products').length === 0) {
 }
 
 // ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: ['https://elix-kappa.vercel.app', 'http://localhost:5173'] }));
-
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { error: 'Too many requests, please try again later.' }
-});
+app.use(cors({ origin: '*' }));
 
 const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
