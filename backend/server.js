@@ -225,6 +225,25 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: err.message });
 });
 
+app.get('/api/products/:id/variants', (req, res) => {
+  const variants = readDB('product_variants').filter(v => v.product_id === Number(req.params.id));
+  res.json(variants);
+});
+
+app.post('/api/admin/products/:id/variants', auth, (req, res) => {
+  const { variants } = req.body;
+  const all = readDB('product_variants').filter(v => v.product_id !== Number(req.params.id));
+  const newVariants = variants.map((v, i) => ({
+    id: Date.now() + i,
+    product_id: Number(req.params.id),
+    stone_color: v.stone_color || '',
+    size: v.size || '',
+    stock: Number(v.stock) || 0
+  }));
+  writeDB('product_variants', [...all, ...newVariants]);
+  res.json({ success: true });
+});
+
 app.listen(PORT, () => {
   console.log(`\n✦ Elix backend running → http://localhost:${PORT}`);
   console.log(`  Admin password: ${ADMIN_PASSWORD}\n`);

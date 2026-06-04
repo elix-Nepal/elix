@@ -113,37 +113,107 @@ function ProductDetail({p,onAdd,onClose}) {
   const sym={Ring:'◯',Necklace:'⛓',Earrings:'◎',Bracelet:'⌒'};
   const imgSrc=p.image_url?(p.image_url.startsWith('/')?API+p.image_url:p.image_url):null;
   const [added,setAdded]=useState(false);
+  const [variants,setVariants]=useState([]);
+  const [selectedStone,setSelectedStone]=useState('');
+  const [selectedSize,setSelectedSize]=useState('');
+
+  useEffect(()=>{
+    call(`/api/products/${p.id}/variants`).then(setVariants).catch(()=>{});
+  },[p.id]);
+
+  const stones=[...new Set(variants.map(v=>v.stone_color).filter(Boolean))];
+  const sizes=[...new Set(variants.map(v=>v.size).filter(Boolean))];
+
+  const getVariantStock=()=>{
+    if(!p.has_stone && !p.has_size) return p.stock;
+    const match=variants.find(v=>{
+      const stoneMatch = !p.has_stone || v.stone_color===selectedStone;
+      const sizeMatch = !p.has_size || v.size===selectedSize;
+      return stoneMatch && sizeMatch;
+    });
+    return match ? match.stock : null;
+  };
+
+  const variantStock=getVariantStock();
+  const inStock=variantStock===null?true:variantStock>0;
+  const canAdd=()=>{
+    if(p.has_stone && !selectedStone) return false;
+    if(p.has_size && !selectedSize) return false;
+    return inStock;
+  };
+
   const handleAdd=()=>{
-    onAdd(p);
+    if(!canAdd()) return;
+    onAdd({...p, stone_color:selectedStone, size:selectedSize});
     setAdded(true);
     setTimeout(()=>setAdded(false),2000);
   };
+
   return <Modal onClose={onClose}>
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:'2rem',alignItems:'start'}}>
-      {/* Image */}
       <div style={{height:280,background:C.surface,border:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
         {imgSrc?<img src={imgSrc} alt={p.name} style={{width:'100%',height:'100%',objectFit:'cover'}}/>
         :<span style={{fontSize:'5rem',color:'#555'}}>{sym[p.category]||'◈'}</span>}
       </div>
-      {/* Info */}
       <div>
         <p style={{fontSize:'0.62rem',letterSpacing:'0.2em',textTransform:'uppercase',color:C.gold,marginBottom:'0.5rem',fontFamily:F.B}}>{p.category}</p>
         <p style={{fontFamily:F.D,fontSize:'1.8rem',fontWeight:300,color:C.text,fontStyle:'italic',marginBottom:'0.5rem'}}>{p.name}</p>
         <p style={{fontFamily:F.D,fontSize:'1.5rem',color:C.gold,marginBottom:'1.25rem'}}>NPR {p.price.toLocaleString()}</p>
         <div style={{width:40,height:1,background:C.border,marginBottom:'1.25rem'}}/>
         {p.description&&<p style={{fontSize:'0.82rem',color:C.muted,lineHeight:1.8,marginBottom:'1.5rem',fontFamily:F.B}}>{p.description}</p>}
-        <div style={{display:'flex',gap:'0.75rem',flexWrap:'wrap',marginBottom:'1.5rem'}}>
-          {[['Material','Silver .925'],['Category',p.category],['Stock',p.stock>0?'In Stock':'Out of Stock']].map(([k,v])=>(
-            <div key={k} style={{background:C.surface,border:`1px solid ${C.border}`,padding:'0.5rem 0.85rem'}}>
-              <p style={{fontSize:'0.58rem',letterSpacing:'0.15em',textTransform:'uppercase',color:C.muted,marginBottom:2,fontFamily:F.B}}>{k}</p>
-              <p style={{fontSize:'0.78rem',color:C.text,fontFamily:F.B}}>{v}</p>
-            </div>
-          ))}
+
+        {/* Stone color selector */}
+        {p.has_stone&&stones.length>0&&<div style={{marginBottom:'1.25rem'}}>
+          <p style={{fontSize:'0.62rem',letterSpacing:'0.15em',textTransform:'uppercase',color:C.muted,marginBottom:'0.65rem',fontFamily:F.B}}>Stone Color</p>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {stones.map(s=>(
+              <button key={s} onClick={()=>setSelectedStone(s)} style={{
+                padding:'6px 14px',fontSize:'0.72rem',fontFamily:F.B,cursor:'pointer',
+                border:`1px solid ${selectedStone===s?C.gold:C.border}`,
+                background:selectedStone===s?C.goldDim:'transparent',
+                color:selectedStone===s?C.gold:C.muted,transition:'all 0.2s'
+              }}>{s}</button>
+            ))}
+          </div>
+        </div>}
+
+        {/* Size selector */}
+        {p.has_size&&sizes.length>0&&<div style={{marginBottom:'1.25rem'}}>
+          <p style={{fontSize:'0.62rem',letterSpacing:'0.15em',textTransform:'uppercase',color:C.muted,marginBottom:'0.65rem',fontFamily:F.B}}>Size</p>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {sizes.map(s=>{
+              const v=variants.find(v=>
+                (!p.has_stone||!selectedStone||v.stone_color===selectedStone)&&v.size===s
+              );
+              const outOfStock=v&&v.stock===0;
+              return <button key={s} onClick={()=>!outOfStock&&setSelectedSize(s)} style={{
+                padding:'6px 14px',fontSize:'0.72rem',fontFamily:F.B,
+                cursor:outOfStock?'not-allowed':'pointer',
+                border:`1px solid ${selectedSize===s?C.gold:C.border}`,
+                background:selectedSize===s?C.goldDim:'transparent',
+                color:outOfStock?'#444':selectedSize===s?C.gold:C.muted,
+                textDecoration:outOfStock?'line-through':'none',
+                transition:'all 0.2s'
+              }}>{s}</button>;
+            })}
+          </div>
+        </div>}
+
+        {/* Stock status */}
+        <div style={{marginBottom:'1.25rem'}}>
+          {((!p.has_stone||selectedStone)&&(!p.has_size||selectedSize))?
+            <span style={{fontSize:'0.72rem',fontFamily:F.B,color:inStock?'#4a9a6a':'#c47070',padding:'4px 10px',border:`1px solid ${inStock?'#4a9a6a44':'#c4707044'}`,background:inStock?'#0a2a1a':'#2a0a0a'}}>
+              {inStock?`In Stock (${variantStock} left)`:'Out of Stock'}
+            </span>
+          :<span style={{fontSize:'0.72rem',color:C.muted,fontFamily:F.B}}>
+            {p.has_stone&&!selectedStone?'Select a stone color':p.has_size&&!selectedSize?'Select a size':''}
+          </span>}
         </div>
-        <Btn fill full onClick={handleAdd}>{added?'Added to Cart ✓':'Add to Cart'}</Btn>
-        <p style={{fontSize:'0.65rem',color:C.muted,marginTop:'0.75rem',textAlign:'center',fontFamily:F.B}}>
-          Buy 3+ items for automatic bulk discount
-        </p>
+
+        <Btn fill full onClick={handleAdd} disabled={!canAdd()}>
+          {added?'Added to Cart ✓':!canAdd()&&(p.has_stone&&!selectedStone)?'Select Stone Color':!canAdd()&&(p.has_size&&!selectedSize)?'Select Size':!inStock?'Out of Stock':'Add to Cart'}
+        </Btn>
+        <p style={{fontSize:'0.65rem',color:C.muted,marginTop:'0.75rem',textAlign:'center',fontFamily:F.B}}>Buy 3+ items for automatic bulk discount</p>
       </div>
     </div>
   </Modal>;
@@ -542,14 +612,27 @@ function AdminOrders() {
 function AdminProducts() {
   const [products,setProducts]=useState([]);
   const [editing,setEditing]=useState(null);
-  const [form,setForm]=useState({name:'',category:'Ring',price:'',description:'',image_url:'',stock:'100'});
+  const [form,setForm]=useState({name:'',category:'Ring',price:'',description:'',image_url:'',stock:'100',has_stone:false,has_size:false});
   const [uploading,setUploading]=useState(false);
+  const [variants,setVariants]=useState([]);
   const fileRef=useRef();
   const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+
   const load=()=>call('/api/admin/products').then(setProducts).catch(console.error);
   useEffect(()=>{load();},[]);
-  const openAdd=()=>{setEditing('new');setForm({name:'',category:'Ring',price:'',description:'',image_url:'',stock:'100'});};
-  const openEdit=p=>{setEditing(p.id);setForm({name:p.name,category:p.category,price:String(p.price),description:p.description||'',image_url:p.image_url||'',stock:String(p.stock)});};
+
+  const openAdd=()=>{
+    setEditing('new');
+    setForm({name:'',category:'Ring',price:'',description:'',image_url:'',stock:'100',has_stone:false,has_size:false});
+    setVariants([]);
+  };
+
+  const openEdit=p=>{
+    setEditing(p.id);
+    setForm({name:p.name,category:p.category,price:String(p.price),description:p.description||'',image_url:p.image_url||'',stock:String(p.stock),has_stone:!!p.has_stone,has_size:!!p.has_size});
+    call(`/api/products/${p.id}/variants`).then(setVariants).catch(()=>setVariants([]));
+  };
+
   const uploadImage=async file=>{
     setUploading(true);
     const fd=new FormData();fd.append('image',file);
@@ -557,18 +640,34 @@ function AdminProducts() {
     catch(e){alert('Upload failed: '+e.message);}
     setUploading(false);
   };
+
+  // Variant helpers
+  const addVariant=()=>setVariants(v=>[...v,{stone_color:'',size:'',stock:10}]);
+  const updateVariant=(i,k,v)=>setVariants(prev=>prev.map((item,idx)=>idx===i?{...item,[k]:v}:item));
+  const removeVariant=i=>setVariants(prev=>prev.filter((_,idx)=>idx!==i));
+
   const save=async()=>{
     if(!form.name||!form.price) return alert('Name and price required.');
     try{
-      if(editing==='new') await call('/api/admin/products',{method:'POST',body:form});
-      else await call(`/api/admin/products/${editing}`,{method:'PUT',body:{...form,is_active:1}});
+      let productId=editing;
+      if(editing==='new'){
+        const r=await call('/api/admin/products',{method:'POST',body:{...form,has_stone:form.has_stone?1:0,has_size:form.has_size?1:0}});
+        productId=r.id;
+      } else {
+        await call(`/api/admin/products/${editing}`,{method:'PUT',body:{...form,is_active:1,has_stone:form.has_stone?1:0,has_size:form.has_size?1:0}});
+      }
+      if((form.has_stone||form.has_size)&&variants.length>0){
+        await call(`/api/admin/products/${productId}/variants`,{method:'POST',body:{variants}});
+      }
       load();setEditing(null);
     }catch(e){alert(e.message);}
   };
+
   const del=async id=>{
     if(!confirm('Remove this product?')) return;
     await call(`/api/admin/products/${id}`,{method:'DELETE'});load();
   };
+
   return <div style={{padding:'2rem'}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
       <h2 style={{fontFamily:F.D,fontSize:'2rem',color:C.text,fontStyle:'italic'}}>Products</h2>
@@ -585,6 +684,10 @@ function AdminProducts() {
           <div style={{padding:'0.9rem 1rem'}}>
             <p style={{fontFamily:F.D,fontSize:'0.95rem',color:C.text,marginBottom:2}}>{p.name}</p>
             <p style={{fontSize:'0.62rem',letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,marginBottom:'0.65rem',fontFamily:F.B}}>{p.category} · Stock: {p.stock}</p>
+            <div style={{display:'flex',gap:6,marginBottom:'0.5rem'}}>
+              {p.has_stone?<span style={{fontSize:'0.58rem',padding:'2px 7px',border:`1px solid ${C.gold}44`,color:C.gold,fontFamily:F.B}}>Stone</span>:null}
+              {p.has_size?<span style={{fontSize:'0.58rem',padding:'2px 7px',border:`1px solid ${C.gold}44`,color:C.gold,fontFamily:F.B}}>Sizes</span>:null}
+            </div>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <span style={{fontSize:'0.85rem',color:C.gold}}>NPR {Number(p.price).toLocaleString()}</span>
               <div style={{display:'flex',gap:6}}>
@@ -596,15 +699,55 @@ function AdminProducts() {
         </div>;
       })}
     </div>
+
     {editing!==null&&<Modal onClose={()=>setEditing(null)}>
       <p style={{fontFamily:F.D,fontSize:'1.5rem',color:C.text,fontStyle:'italic',marginBottom:'1.5rem'}}>{editing==='new'?'Add Product':'Edit Product'}</p>
       <Field label="Product Name" value={form.name} onChange={v=>upd('name',v)} placeholder="e.g. Classic Band Ring" required/>
       <Field label="Category" value={form.category} onChange={v=>upd('category',v)} as="select" options={['Ring','Necklace','Earrings','Bracelet','Other']}/>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
         <Field label="Price (NPR)" value={form.price} onChange={v=>upd('price',v)} type="number" placeholder="2500" required/>
-        <Field label="Stock" value={form.stock} onChange={v=>upd('stock',v)} type="number" placeholder="100"/>
+        <Field label="Base Stock" value={form.stock} onChange={v=>upd('stock',v)} type="number" placeholder="100"/>
       </div>
       <Field label="Description" value={form.description} onChange={v=>upd('description',v)} as="textarea" rows={3} placeholder="Brief product description..."/>
+
+      {/* Toggles */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem',marginBottom:'1.25rem'}}>
+        <div onClick={()=>upd('has_stone',!form.has_stone)} style={{padding:'0.75rem 1rem',cursor:'pointer',border:`1px solid ${form.has_stone?C.gold:C.border}`,background:form.has_stone?C.goldDim:'transparent',display:'flex',alignItems:'center',gap:10}}>
+          <div style={{width:11,height:11,borderRadius:'50%',border:`1px solid ${form.has_stone?C.gold:C.muted}`,background:form.has_stone?C.gold:'transparent'}}/>
+          <span style={{fontSize:'0.72rem',color:form.has_stone?C.gold:C.muted,fontFamily:F.B,textTransform:'uppercase',letterSpacing:'0.12em'}}>Has Stone Color</span>
+        </div>
+        <div onClick={()=>upd('has_size',!form.has_size)} style={{padding:'0.75rem 1rem',cursor:'pointer',border:`1px solid ${form.has_size?C.gold:C.border}`,background:form.has_size?C.goldDim:'transparent',display:'flex',alignItems:'center',gap:10}}>
+          <div style={{width:11,height:11,borderRadius:'50%',border:`1px solid ${form.has_size?C.gold:C.muted}`,background:form.has_size?C.gold:'transparent'}}/>
+          <span style={{fontSize:'0.72rem',color:form.has_size?C.gold:C.muted,fontFamily:F.B,textTransform:'uppercase',letterSpacing:'0.12em'}}>Has Sizes</span>
+        </div>
+      </div>
+
+      {/* Variants table */}
+      {(form.has_stone||form.has_size)&&<div style={{marginBottom:'1.5rem'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
+          <p style={{fontSize:'0.62rem',letterSpacing:'0.15em',textTransform:'uppercase',color:C.muted,fontFamily:F.B}}>
+            {form.has_stone&&form.has_size?'Stone + Size Variants':form.has_stone?'Stone Color Variants':'Size Variants'}
+          </p>
+          <Btn small onClick={addVariant}>+ Add Row</Btn>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:`${form.has_stone?'1fr':''}${form.has_size?' 1fr':''} 80px 32px`,gap:'0.5rem',marginBottom:'0.5rem'}}>
+          {form.has_stone&&<p style={{fontSize:'0.6rem',letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,fontFamily:F.B}}>Stone Color</p>}
+          {form.has_size&&<p style={{fontSize:'0.6rem',letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,fontFamily:F.B}}>Size</p>}
+          <p style={{fontSize:'0.6rem',letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,fontFamily:F.B}}>Stock</p>
+          <span/>
+        </div>
+        {variants.map((v,i)=>(
+          <div key={i} style={{display:'grid',gridTemplateColumns:`${form.has_stone?'1fr':''}${form.has_size?' 1fr':''} 80px 32px`,gap:'0.5rem',marginBottom:'0.5rem'}}>
+            {form.has_stone&&<input value={v.stone_color} onChange={e=>updateVariant(i,'stone_color',e.target.value)} placeholder="e.g. Red" style={{background:C.surface,border:`1px solid ${C.border}`,color:C.text,padding:'0.5rem 0.75rem',fontSize:'0.82rem',fontFamily:F.B,outline:'none'}}/>}
+            {form.has_size&&<input value={v.size} onChange={e=>updateVariant(i,'size',e.target.value)} placeholder="e.g. 7" style={{background:C.surface,border:`1px solid ${C.border}`,color:C.text,padding:'0.5rem 0.75rem',fontSize:'0.82rem',fontFamily:F.B,outline:'none'}}/>}
+            <input type="number" value={v.stock} onChange={e=>updateVariant(i,'stock',e.target.value)} placeholder="10" style={{background:C.surface,border:`1px solid ${C.border}`,color:C.text,padding:'0.5rem 0.75rem',fontSize:'0.82rem',fontFamily:F.B,outline:'none'}}/>
+            <button onClick={()=>removeVariant(i)} style={{background:'transparent',border:`1px solid #8a3a3a33`,color:'#c47070',cursor:'pointer',fontSize:'0.7rem'}}>✕</button>
+          </div>
+        ))}
+        {variants.length===0&&<p style={{fontSize:'0.75rem',color:C.muted,fontFamily:F.B}}>No variants yet — click "+ Add Row" to add combinations.</p>}
+      </div>}
+
+      {/* Image upload */}
       <p style={{fontSize:'0.62rem',letterSpacing:'0.15em',textTransform:'uppercase',color:C.muted,marginBottom:'0.5rem',fontFamily:F.B}}>Product Photo</p>
       {form.image_url&&<div style={{marginBottom:'0.75rem',height:120,overflow:'hidden',border:`1px solid ${C.border}`}}>
         <img src={form.image_url.startsWith('/')?API+form.image_url:form.image_url} style={{width:'100%',height:'100%',objectFit:'cover'}} alt=""/>
@@ -623,7 +766,6 @@ function AdminProducts() {
     </Modal>}
   </div>;
 }
-
 function AdminCustom() {
   const [requests,setRequests]=useState([]);
   const [selected,setSelected]=useState(null);
