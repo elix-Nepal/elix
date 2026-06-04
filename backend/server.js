@@ -3,6 +3,7 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
 const fs = require('fs');
 
 const app = express();
@@ -10,48 +11,12 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'elix_secret_key';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'elix@admin2024';
 
-// ─── SIMPLE JSON DATABASE (no compilation needed) ─────────────────────────────
-if (!fs.existsSync('./data')) fs.mkdirSync('./data');
-
-function readDB(name) {
-  const file = `./data/${name}.json`;
-  if (!fs.existsSync(file)) fs.writeFileSync(file, JSON.stringify([]));
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
-}
-
-function writeDB(name, data) {
-  fs.writeFileSync(`./data/${name}.json`, JSON.stringify(data, null, 2));
-}
-
-function nextId(arr) {
-  return arr.length === 0 ? 1 : Math.max(...arr.map(i => i.id)) + 1;
-}
-
-// Seed default products if empty
-if (readDB('products').length === 0) {
-  writeDB('products', [
-    {id:1, name:'Classic Band Ring',       category:'Ring',     price:2500, description:'Timeless sterling silver band ring.',            image_url:'', stock:100, is_active:1, created_at: new Date().toISOString()},
-    {id:2, name:'Box Chain Necklace 18"',  category:'Necklace', price:3800, description:'Elegant box chain in .925 sterling silver.',     image_url:'', stock:100, is_active:1, created_at: new Date().toISOString()},
-    {id:3, name:'Medium Hoop Earrings',    category:'Earrings', price:2200, description:'Classic medium hoops in polished silver.',       image_url:'', stock:100, is_active:1, created_at: new Date().toISOString()},
-    {id:4, name:'Open Cuff Bracelet',      category:'Bracelet', price:3200, description:'Adjustable open cuff in pure .925 silver.',      image_url:'', stock:100, is_active:1, created_at: new Date().toISOString()},
-    {id:5, name:'Crescent Moon Pendant',   category:'Necklace', price:4500, description:'Delicate crescent moon pendant with 20" chain.', image_url:'', stock:100, is_active:1, created_at: new Date().toISOString()},
-    {id:6, name:'Stacking Rings Set×3',    category:'Ring',     price:5500, description:'Set of 3 minimalist stacking rings.',            image_url:'', stock:100, is_active:1, created_at: new Date().toISOString()},
-    {id:7, name:'Leaf Drop Earrings',      category:'Earrings', price:2800, description:'Nature-inspired leaf drop earrings.',            image_url:'', stock:100, is_active:1, created_at: new Date().toISOString()},
-    {id:8, name:'Twisted Bangle',          category:'Bracelet', price:2900, description:'Twisted rope design bangle in .925 silver.',     image_url:'', stock:100, is_active:1, created_at: new Date().toISOString()},
-  ]);
-}
-
-// ─── MIDDLEWARE ───────────────────────────────────────────────────────────────
-app.use(cors({ origin: ['https://elix-kappa.vercel.app', 'http://localhost:5173'] }));
-
-const adminLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 20,
-  message: { error: 'Too many requests.' }
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
 });
 
-app.use('/api/', limiter);
-app.use('/api/admin/', adminLimiter);
+app.use(cors({ origin: ['https://elix-kappa.vercel.app', 'http://localhost:5173'] }));
 app.use(express.json());
 
 if (!fs.existsSync('./uploads')) fs.mkdirSync('./uploads');
@@ -64,8 +29,7 @@ const upload = multer({
   }),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    ['image/jpeg','image/png','image/webp'].includes(file.mimetype)
-      ? cb(null, true) : cb(new Error('Only JPG/PNG/WEBP allowed'));
+    ['image/jpeg','image/png','image/webp'].includes(file.mimetype) ? cb(null, true) : cb(new Error('Only JPG/PNG/WEBP allowed'));
   }
 });
 
@@ -84,144 +48,130 @@ function genOrderNum() {
   return 'ELX' + Date.now().toString().slice(-7) + Math.floor(Math.random() * 10);
 }
 
-// ─── PUBLIC ROUTES ────────────────────────────────────────────────────────────
-
-app.get('/api/products', (req, res) => {
-  res.json(readDB('products').filter(p => p.is_active));
+// Public routes
+app.get('/api/products', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM products WHERE is_active=1 ORDER BY created_at DESC');
+  res.json(rows);
 });
 
-app.post('/api/orders', (req, res) => {
+app.get('/api/products/:id/variants', async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM product_variants WHERE product_id=$1', [req.params.id]);
+  res.json(rows);
+});
+
+app.post('/api/orders', async (req, res) => {
   const { customer, items, payment_method, subtotal, discount_pct, discount_amount, total } = req.body;
   if (!customer?.name || !customer?.phone || !customer?.address || !customer?.city)
     return res.status(400).json({ error: 'Name, phone, address, and city are required.' });
-
-  const orders = readDB('orders');
-  const orderItems = readDB('order_items');
-  const newOrder = {
-    id: nextId(orders),
-    order_number: genOrderNum(),
-    customer_name: customer.name,
-    customer_phone: customer.phone,
-    customer_email: customer.email || '',
-    delivery_address: customer.address,
-    city: customer.city,
-    notes: customer.notes || '',
-    payment_method,
-    payment_status: 'pending',
-    order_status: 'new',
-    subtotal, discount_pct: discount_pct||0,
-    discount_amount: discount_amount||0,
-    total,
-    created_at: new Date().toISOString()
-  };
-  orders.push(newOrder);
-  writeDB('orders', orders);
-
-  const allItems = readDB('order_items');
-  items.forEach(i => {
-    allItems.push({ id: nextId(allItems), order_id: newOrder.id, product_id: i.id, product_name: i.name, price: i.price, quantity: i.qty });
-  });
-  writeDB('order_items', allItems);
-
-  res.json({ success: true, order_number: newOrder.order_number });
+  const num = genOrderNum();
+  const { rows } = await pool.query(
+    `INSERT INTO orders (order_number,customer_name,customer_phone,customer_email,delivery_address,city,notes,payment_method,subtotal,discount_pct,discount_amount,total)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+    [num, customer.name, customer.phone, customer.email||'', customer.address, customer.city, customer.notes||'', payment_method, subtotal, discount_pct||0, discount_amount||0, total]
+  );
+  for (const i of items) {
+    await pool.query(
+      'INSERT INTO order_items (order_id,product_id,product_name,price,quantity,stone_color,size) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+      [rows[0].id, i.id, i.name, i.price, i.qty, i.stone_color||'', i.size||'']
+    );
+  }
+  res.json({ success: true, order_number: num });
 });
 
-app.post('/api/custom', (req, res) => {
+app.post('/api/custom', async (req, res) => {
   const { name, email, phone, type, description, budget } = req.body;
-  if (!name || !phone || !description)
-    return res.status(400).json({ error: 'Name, phone, description required.' });
-  const customs = readDB('custom_requests');
-  customs.push({ id: nextId(customs), customer_name: name, customer_email: email||'', customer_phone: phone, piece_type: type||'other', description, budget: budget||'', status:'new', admin_notes:'', created_at: new Date().toISOString() });
-  writeDB('custom_requests', customs);
+  if (!name || !phone || !description) return res.status(400).json({ error: 'Name, phone, description required.' });
+  await pool.query(
+    'INSERT INTO custom_requests (customer_name,customer_email,customer_phone,piece_type,description,budget) VALUES ($1,$2,$3,$4,$5,$6)',
+    [name, email||'', phone, type||'other', description, budget||'']
+  );
   res.json({ success: true });
 });
 
-// ─── ADMIN ROUTES ─────────────────────────────────────────────────────────────
-
+// Admin routes
 app.post('/api/admin/login', (req, res) => {
   if (req.body.password === ADMIN_PASSWORD)
     res.json({ token: jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: '30d' }) });
   else res.status(401).json({ error: 'Wrong password' });
 });
 
-app.get('/api/admin/stats', auth, (req, res) => {
-  const orders = readDB('orders');
-  const products = readDB('products');
-  const customs = readDB('custom_requests');
-  res.json({
-    totalOrders: orders.length,
-    revenue: orders.filter(o => o.order_status !== 'cancelled').reduce((s, o) => s + o.total, 0),
-    pending: orders.filter(o => o.order_status === 'new').length,
-    products: products.filter(p => p.is_active).length,
-    customNew: customs.filter(c => c.status === 'new').length,
-  });
+app.get('/api/admin/stats', auth, async (req, res) => {
+  const totalOrders = (await pool.query('SELECT COUNT(*) c FROM orders')).rows[0].c;
+  const revenue = (await pool.query("SELECT COALESCE(SUM(total),0) s FROM orders WHERE order_status!='cancelled'")).rows[0].s;
+  const pending = (await pool.query("SELECT COUNT(*) c FROM orders WHERE order_status='new'")).rows[0].c;
+  const products = (await pool.query('SELECT COUNT(*) c FROM products WHERE is_active=1')).rows[0].c;
+  const customNew = (await pool.query("SELECT COUNT(*) c FROM custom_requests WHERE status='new'")).rows[0].c;
+  res.json({ totalOrders, revenue, pending, products, customNew });
 });
 
-app.get('/api/admin/orders', auth, (req, res) => {
-  const orders = readDB('orders');
-  const items = readDB('order_items');
-  res.json(orders.map(o => ({
-    ...o,
-    items_list: items.filter(i => i.order_id === o.id).map(i => `${i.product_name} ×${i.quantity}`).join(' | ')
-  })).reverse());
+app.get('/api/admin/orders', auth, async (req, res) => {
+  const { rows } = await pool.query(`
+    SELECT o.*, STRING_AGG(oi.product_name || ' x' || oi.quantity, ' | ') items_list
+    FROM orders o LEFT JOIN order_items oi ON o.id=oi.order_id
+    GROUP BY o.id ORDER BY o.created_at DESC
+  `);
+  res.json(rows);
 });
 
-app.get('/api/admin/orders/:id', auth, (req, res) => {
-  const order = readDB('orders').find(o => o.id === Number(req.params.id));
+app.get('/api/admin/orders/:id', auth, async (req, res) => {
+  const order = (await pool.query('SELECT * FROM orders WHERE id=$1', [req.params.id])).rows[0];
   if (!order) return res.status(404).json({ error: 'Not found' });
-  order.items = readDB('order_items').filter(i => i.order_id === order.id);
+  order.items = (await pool.query('SELECT * FROM order_items WHERE order_id=$1', [req.params.id])).rows;
   res.json(order);
 });
 
-app.patch('/api/admin/orders/:id', auth, (req, res) => {
-  const orders = readDB('orders');
-  const idx = orders.findIndex(o => o.id === Number(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  orders[idx].order_status = req.body.order_status;
-  orders[idx].payment_status = req.body.payment_status;
-  writeDB('orders', orders);
+app.patch('/api/admin/orders/:id', auth, async (req, res) => {
+  await pool.query('UPDATE orders SET order_status=$1, payment_status=$2 WHERE id=$3', [req.body.order_status, req.body.payment_status, req.params.id]);
   res.json({ success: true });
 });
 
-app.get('/api/admin/custom', auth, (req, res) => {
-  res.json(readDB('custom_requests').reverse());
+app.get('/api/admin/custom', auth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM custom_requests ORDER BY created_at DESC');
+  res.json(rows);
 });
 
-app.patch('/api/admin/custom/:id', auth, (req, res) => {
-  const customs = readDB('custom_requests');
-  const idx = customs.findIndex(c => c.id === Number(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  customs[idx].status = req.body.status;
-  customs[idx].admin_notes = req.body.admin_notes || '';
-  writeDB('custom_requests', customs);
+app.patch('/api/admin/custom/:id', auth, async (req, res) => {
+  await pool.query('UPDATE custom_requests SET status=$1, admin_notes=$2 WHERE id=$3', [req.body.status, req.body.admin_notes||'', req.params.id]);
   res.json({ success: true });
 });
 
-app.get('/api/admin/products', auth, (req, res) => {
-  res.json(readDB('products').reverse());
+app.get('/api/admin/products', auth, async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM products ORDER BY created_at DESC');
+  res.json(rows);
 });
 
-app.post('/api/admin/products', auth, (req, res) => {
-  const products = readDB('products');
-  const p = { id: nextId(products), name: req.body.name, category: req.body.category, price: Number(req.body.price), description: req.body.description||'', image_url: req.body.image_url||'', stock: Number(req.body.stock)||100, is_active: 1, created_at: new Date().toISOString() };
-  products.push(p);
-  writeDB('products', products);
-  res.json({ id: p.id, success: true });
+app.post('/api/admin/products', auth, async (req, res) => {
+  const { name, category, price, description, image_url, stock, has_stone, has_size } = req.body;
+  const { rows } = await pool.query(
+    'INSERT INTO products (name,category,price,description,image_url,stock,has_stone,has_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+    [name, category, Number(price), description||'', image_url||'', Number(stock)||100, has_stone||0, has_size||0]
+  );
+  res.json({ id: rows[0].id, success: true });
 });
 
-app.put('/api/admin/products/:id', auth, (req, res) => {
-  const products = readDB('products');
-  const idx = products.findIndex(p => p.id === Number(req.params.id));
-  if (idx === -1) return res.status(404).json({ error: 'Not found' });
-  products[idx] = { ...products[idx], ...req.body, id: products[idx].id };
-  writeDB('products', products);
+app.put('/api/admin/products/:id', auth, async (req, res) => {
+  const { name, category, price, description, image_url, stock, is_active, has_stone, has_size } = req.body;
+  await pool.query(
+    'UPDATE products SET name=$1,category=$2,price=$3,description=$4,image_url=$5,stock=$6,is_active=$7,has_stone=$8,has_size=$9 WHERE id=$10',
+    [name, category, Number(price), description, image_url, Number(stock), is_active??1, has_stone||0, has_size||0, req.params.id]
+  );
   res.json({ success: true });
 });
 
-app.delete('/api/admin/products/:id', auth, (req, res) => {
-  const products = readDB('products');
-  const idx = products.findIndex(p => p.id === Number(req.params.id));
-  if (idx !== -1) { products[idx].is_active = 0; writeDB('products', products); }
+app.delete('/api/admin/products/:id', auth, async (req, res) => {
+  await pool.query('UPDATE products SET is_active=0 WHERE id=$1', [req.params.id]);
+  res.json({ success: true });
+});
+
+app.post('/api/admin/products/:id/variants', auth, async (req, res) => {
+  const { variants } = req.body;
+  await pool.query('DELETE FROM product_variants WHERE product_id=$1', [req.params.id]);
+  for (const v of variants) {
+    await pool.query(
+      'INSERT INTO product_variants (product_id,stone_color,size,stock) VALUES ($1,$2,$3,$4)',
+      [req.params.id, v.stone_color||'', v.size||'', Number(v.stock)||0]
+    );
+  }
   res.json({ success: true });
 });
 
@@ -231,29 +181,10 @@ app.post('/api/admin/upload', auth, upload.single('image'), (req, res) => {
 });
 
 app.use((err, req, res, next) => {
+  console.error(err.message);
   res.status(500).json({ error: err.message });
 });
 
-app.get('/api/products/:id/variants', (req, res) => {
-  const variants = readDB('product_variants').filter(v => v.product_id === Number(req.params.id));
-  res.json(variants);
-});
-
-app.post('/api/admin/products/:id/variants', auth, (req, res) => {
-  const { variants } = req.body;
-  const all = readDB('product_variants').filter(v => v.product_id !== Number(req.params.id));
-  const newVariants = variants.map((v, i) => ({
-    id: Date.now() + i,
-    product_id: Number(req.params.id),
-    stone_color: v.stone_color || '',
-    size: v.size || '',
-    stock: Number(v.stock) || 0
-  }));
-  writeDB('product_variants', [...all, ...newVariants]);
-  res.json({ success: true });
-});
-
 app.listen(PORT, () => {
-  console.log(`\n✦ Elix backend running → http://localhost:${PORT}`);
-  console.log(`  Admin password: ${ADMIN_PASSWORD}\n`);
+  console.log(`✦ Elix backend running → http://localhost:${PORT}`);
 });
