@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 
-const API = "https://elix-production.up.railway.app";
+const API = "https://elix-7jhw.onrender.com";
 
 const C = {
   bg:'#070707', surface:'#0d0d0d', card:'#111111',
